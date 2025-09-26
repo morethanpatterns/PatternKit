@@ -5,10 +5,10 @@ from functools import cmp_to_key
 ROOT = os.getcwd()
 AUTHOR_DIRS = [
     "PatternKit_Winifred_Aldrich",
-    "PatternKit_Helen Joseph-Armstrong",
+    "PatternKit_Helen_Joseph_Armstrong",
     "PatternKit_Guido_Hofenbitzer",
-    "PatternKit_Muller_&_Sohn",
-    "PatternKit_Injoo_&_Mikyung",
+    "PatternKit_Muller_Sohn",
+    "PatternKit_Injoo_Mikyung",
     "PatternKit_Sylvia_Rosen",
     "PatternKit_Michael_Rohr",
     "PatternKit_Lot13_Studio",
@@ -16,22 +16,24 @@ AUTHOR_DIRS = [
 ]
 MINITOOLS_DIR = "PatternKit_MiniTools"
 
-SEMVER_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z\.-]+)?$")  # v1.2.3 or v1.2.3-beta.1
+SEMVER_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z\.-]+)?$")
 EDITION_RE = re.compile(r"^ed(\d+)$", re.IGNORECASE)
+
 
 def parse_semver(vstr):
     """Return (major, minor, patch, pre) where pre='' for stable."""
     m = SEMVER_RE.match(vstr if vstr.startswith('v') else 'v' + vstr)
     if not m:
         return (0, 0, 0, "")
-    major, minor, patch = map(int, m.group(1,2,3))
+    major, minor, patch = map(int, m.group(1, 2, 3))
     pre = m.group(4) or ""
     return (major, minor, patch, pre)
 
+
 def semver_desc(a, b):
     """Sort for descending order: stable > prerelease at same core."""
-    A = parse_semver(a); B = parse_semver(b)
-    # compare core numbers
+    A = parse_semver(a)
+    B = parse_semver(b)
     if A[:3] != B[:3]:
         return -1 if A[:3] > B[:3] else 1
     # stable outranks prerelease
@@ -42,49 +44,78 @@ def semver_desc(a, b):
         return -1
     if b_pre == "":
         return 1
-    # both prereleases: lexical reverse for descending
     return -1 if a_pre > b_pre else 1
+
 
 def list_jsx(dirpath):
     return [f for f in os.listdir(dirpath) if f.lower().endswith(".jsx")]
 
+
 def parse_module_filename(filename):
     """
-    Modules: <family>_<author...>_[edN]?_vX.Y.Z[-pre].jsx
-    Returns dict with family, edition (or None), version, beta, file.
+    Modules: <family...>_<author...>_[edN]?_vX.Y.Z[-pre].jsx
+    Example: standard_trouser_block_guido_ed6_v1.0.0-beta.jsx
     """
     name = filename[:-4]  # strip .jsx
     parts = name.split("_")
 
     # find version token index
-    v_idx = next((i for i,p in enumerate(parts) if SEMVER_RE.match(p if p.startswith("v") else "v"+p)), -1)
+    v_idx = next((i for i, p in enumerate(parts)
+                  if SEMVER_RE.match(p if p.startswith("v") else "v" + p)), -1)
     if v_idx == -1:
         return None
 
-    # optional edition token is any 'edN' before version
-    ed_token = None
+    # optional edition token like ed6
+    ed_idx = None
     for i in range(v_idx - 1, -1, -1):
         if EDITION_RE.match(parts[i]):
-            ed_token = parts[i]
+            ed_idx = i
             break
+
+    # known author/system tokens (lowercase)
+    KNOWN_AUTHOR_TOKENS = {
+        "winifred", "aldrich",
+        "helen", "joseph", "armstrong",
+        "guido", "hofenbitzer",
+        "muller", "müller", "sohn",
+        "injoo", "mikyung",
+        "sylvia", "rosen",
+        "michael", "rohr",
+        "lot13", "studio",
+        "fernando", "burgo",
+    }
+
+    # locate first author token before version
+    author_idx = -1
+    upper_bound = ed_idx if ed_idx is not None else v_idx
+    for i in range(0, upper_bound):
+        if parts[i].lower() in KNOWN_AUTHOR_TOKENS:
+            author_idx = i
+            break
+
+    # family tokens = everything before the author
+    cutoff = author_idx if author_idx != -1 else (ed_idx if ed_idx is not None else v_idx)
+    family_tokens = parts[:cutoff] or [parts[0]]
+    family = "_".join(family_tokens)
 
     version_token = parts[v_idx]
     version = version_token[1:] if version_token.startswith("v") else version_token
     is_beta = "-" in version
-    family = parts[0]  # first token only
 
     edition = None
-    if ed_token:
-        m = EDITION_RE.match(ed_token)
-        edition = m.group(1) if m else None  # digits only, e.g., "6"
+    if ed_idx is not None:
+        m = EDITION_RE.match(parts[ed_idx])
+        if m:
+            edition = m.group(1)  # e.g., "6"
 
     return {
         "family": family,
-        "edition": edition,  # '6' or None
+        "edition": edition,
         "version": version,
         "beta": is_beta,
         "file": filename
     }
+
 
 def parse_minitool_filename(filename):
     """
@@ -92,7 +123,8 @@ def parse_minitool_filename(filename):
     """
     name = filename[:-4]
     parts = name.split("_")
-    v_idx = next((i for i,p in enumerate(parts) if SEMVER_RE.match(p if p.startswith("v") else "v"+p)), -1)
+    v_idx = next((i for i, p in enumerate(parts)
+                  if SEMVER_RE.match(p if p.startswith("v") else "v" + p)), -1)
     if v_idx == -1:
         return None
     version_token = parts[v_idx]
@@ -107,16 +139,14 @@ def parse_minitool_filename(filename):
         "file": filename
     }
 
+
 def pick_latest(entries):
-    """
-    entries: list of dicts with 'version' and 'beta'.
-    Returns (stable_entry_or_None, beta_entry_or_None) – latest of each.
-    """
     stables = [e for e in entries if not e["beta"]]
     betas = [e for e in entries if e["beta"]]
-    stables.sort(key=cmp_to_key(lambda a,b: semver_desc(a["version"], b["version"])))
-    betas.sort(key=cmp_to_key(lambda a,b: semver_desc(a["version"], b["version"])))
+    stables.sort(key=cmp_to_key(lambda a, b: semver_desc(a["version"], b["version"])))
+    betas.sort(key=cmp_to_key(lambda a, b: semver_desc(a["version"], b["version"])))
     return (stables[0] if stables else None, betas[0] if betas else None)
+
 
 def build_dir(dir_name, is_minitools=False):
     path = os.path.join(ROOT, dir_name)
@@ -130,16 +160,14 @@ def build_dir(dir_name, is_minitools=False):
         if item:
             parsed.append(item)
 
-    # group by (family, edition) so different editions are reported separately
     groups = {}
     for it in parsed:
-        key = (it["family"], it["edition"])  # edition can be None
+        key = (it["family"], it["edition"])
         groups.setdefault(key, []).append(it)
 
     out = {}
     for (family, edition), arr in groups.items():
         stable, beta = pick_latest(arr)
-        # Build entry; if an edition exists, nest under 'editions'
         entry_payload = {}
         if stable:
             entry_payload["latest"] = stable["file"]
@@ -148,26 +176,19 @@ def build_dir(dir_name, is_minitools=False):
             entry_payload["beta"] = beta["file"]
             entry_payload["beta_version"] = beta["version"]
 
-        # Description (lightweight)
-        entry_payload["description"] = (family.replace("_", " ") + (" script" if not is_minitools else ""))
+        entry_payload["description"] = family.replace("_", " ") + (
+            " script" if not is_minitools else ""
+        )
 
-        # Insert into output, with edition-aware structure
         if edition is None or is_minitools:
-            # No edition: put fields at top-level of this family
-            if family not in out:
-                out[family] = entry_payload
-            else:
-                # merge: prefer newer stable/beta if present
-                out[family].update({k:v for k,v in entry_payload.items() if k not in out[family] or k.endswith("_version")})
+            out[family] = entry_payload
         else:
-            # Editioned family: create editions sub-object
             if family not in out:
                 out[family] = {"editions": {}}
-            if "editions" not in out[family]:
-                out[family]["editions"] = {}
             out[family]["editions"][edition] = entry_payload
 
     return out
+
 
 def main():
     manifest = {}
@@ -178,6 +199,7 @@ def main():
     with open(os.path.join(ROOT, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     print("✓ manifest.json updated")
+
 
 if __name__ == "__main__":
     main()

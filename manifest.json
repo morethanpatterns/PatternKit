@@ -1,0 +1,18 @@
+{
+  "PatternKit_Winifred_Aldrich": {},
+  "PatternKit_Helen_Joseph_Armstrong": {},
+  "PatternKit_Guido_Hofenbitzer": {
+    "standard_trousers_block": {
+      "beta": "standard_trousers_block_guido_v1.0.0-beta.jsx",
+      "beta_version": "1.0.0-beta",
+      "description": "standard trousers block script"
+    }
+  },
+  "PatternKit_Muller_Sohn": {},
+  "PatternKit_Injoo_Mikyung": {},
+  "PatternKit_Sylvia_Rosen": {},
+  "PatternKit_Michael_Rohr": {},
+  "PatternKit_Lot13_Studio": {},
+  "PatternKit_Fernando_Burgo": {},
+  "PatternKit_MiniTools": {}
+}
